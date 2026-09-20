@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>HeartRateOscBridge</AssemblyName>
+    <ApplicationIcon>Assets\HeartRateOscBridge.ico</ApplicationIcon>
+    <RootNamespace>HeartRateAntPlus</RootNamespace>
+    <Title>HeartRate OSC Bridge</Title>
+    <Product>HeartRate OSC Bridge</Product>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Platforms>x64</Platforms>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishReadyToRun>false</PublishReadyToRun>
+  </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Assets\HeartRateOscBridge.ico" />
+    <Resource Include="Assets\HeartRateOscBridge.png" />
+    <Reference Include="Microsoft.Windows.SDK.NET" HintPath="..\work\winrt\Microsoft.Windows.SDK.NET.dll" Private="true" />
+    <Reference Include="WinRT.Runtime" HintPath="..\work\winrt\WinRT.Runtime.dll" Private="true" />
+  </ItemGroup>
+</Project>

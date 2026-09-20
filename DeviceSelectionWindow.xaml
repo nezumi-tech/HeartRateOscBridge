@@ -1,0 +1,8 @@
+<Window x:Class="HeartRateAntPlus.DeviceSelectionWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Bluetooth LEデバイスを選択" Width="560" Height="430" WindowStartupLocation="CenterOwner" Background="#101216">
+  <Grid Margin="22">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <StackPanel><TextBlock Text="接続する心拍センサを選択" Foreground="White" FontSize="20" FontWeight="SemiBold"/><TextBlock x:Name="StatusText" Text="周囲のBLEデバイスをスキャン中…" Foreground="#AAB0BC" Margin="0,8,0,14"/></StackPanel>
+    <ListBox x:Name="DevicesList" Grid.Row="1" DisplayMemberPath="DisplayName" Background="#1B1E24" Foreground="White" BorderBrush="#454B57" FontSize="15" MouseDoubleClick="DeviceDoubleClick" SelectionChanged="DeviceSelectionChanged"/>
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0"><Button x:Name="RescanButton" Content="再スキャン" Width="100" Height="34" Click="RescanClick" Margin="0,0,8,0"/><Button x:Name="SelectButton" Content="選択して接続" Width="130" Height="34" Click="SelectClick" IsEnabled="False"/></StackPanel>
+  </Grid>
+</Window>
