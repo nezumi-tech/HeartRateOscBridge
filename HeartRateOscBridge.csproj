@@ -10,6 +10,7 @@
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <WindowsSdkPackageVersion>10.0.19041.57</WindowsSdkPackageVersion>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
@@ -25,7 +26,5 @@
   <ItemGroup>
     <Resource Include="Assets\HeartRateOscBridge.ico" />
     <Resource Include="Assets\HeartRateOscBridge.png" />
-    <Reference Include="Microsoft.Windows.SDK.NET" HintPath="..\work\winrt\Microsoft.Windows.SDK.NET.dll" Private="true" />
-    <Reference Include="WinRT.Runtime" HintPath="..\work\winrt\WinRT.Runtime.dll" Private="true" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,65 @@
+name: Build Windows Release
+
+on:
+  push:
+    branches:
+      - "**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Read application version
+        id: version
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content -Raw HeartRateOscBridge.csproj
+          $version = $project.SelectSingleNode('/Project/PropertyGroup/Version').InnerText
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Expected a three-part version in the project file, got '$version'."
+          }
+          $zipName = "HeartRateOscBridge-Release-v$($version.Replace('.', '-')).zip"
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "zip_name=$zipName" >> $env:GITHUB_OUTPUT
+
+      - name: Restore
+        run: dotnet restore .\HeartRateOscBridge.csproj --runtime win-x64
+
+      - name: Publish single-file application
+        run: >-
+          dotnet publish .\HeartRateOscBridge.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained false
+          --no-restore
+          -p:PublishSingleFile=true
+          -p:PublishReadyToRun=false
+          -p:DebugType=None
+          --output .\publish
+
+      - name: Create versioned ZIP
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path .\publish\HeartRateOscBridge.exe
+          Compress-Archive -LiteralPath $exe.Path -DestinationPath ".\${{ steps.version.outputs.zip_name }}" -CompressionLevel Optimal
+
+      - name: Upload ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.version.outputs.zip_name }}
+          path: .\${{ steps.version.outputs.zip_name }}
+          if-no-files-found: error
+          retention-days: 30
