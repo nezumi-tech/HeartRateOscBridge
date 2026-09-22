@@ -64,7 +64,10 @@
     </StackPanel>
 
     <!-- 9. 余白 -->
-    <Border Grid.Row="8"/>
+    <StackPanel Grid.Row="8" x:Name="UpdateNoticePanel" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" Margin="0,8,0,0">
+      <TextBlock x:Name="UpdateNoticeText" Foreground="#FFC66D" FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0"/>
+      <Button Content="Boothでダウンロード" Click="DownloadUpdateClick" Height="28" Padding="10,2"/>
+    </StackPanel>
 
     <!-- 10. ステータス -->
     <TextBlock Grid.Row="9" x:Name="FooterText" Foreground="#737A87" TextWrapping="Wrap" FontSize="12" Margin="0,20,0,0"/>

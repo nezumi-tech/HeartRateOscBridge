@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using Forms = System.Windows.Forms;
 using System.Windows;
 using System.Windows.Threading;
@@ -22,12 +23,34 @@ public partial class MainWindow : Window
     private bool _exitRequested;
     private readonly bool _startupLaunch;
     private readonly Forms.NotifyIcon _trayIcon;
+    private const string BoothDownloadUrl = "https://nezumi-tech.booth.pm/items/8886420?utm_source=update_notice";
 
     public MainWindow()
     {
         InitializeComponent(); _timer.Tick += (_, _) => Refresh(); _settings.Load(); _settings.ApplyStartupRegistration(); _osc = new OscSender(_settings); _startupLaunch = Environment.GetCommandLineArgs().Any(x => string.Equals(x, "--startup", StringComparison.OrdinalIgnoreCase)); _trayIcon = CreateTrayIcon(); StateChanged += (_, _) => HandleWindowStateChanged(); UpdateOscUi();
         FooterText.Text = "心拍センサを装着して電源を入れてから接続してください。";
-        Loaded += (_, _) => { StartAutoScan(); if (_startupLaunch) HideToTray(); };
+        Loaded += async (_, _) => { StartAutoScan(); if (_startupLaunch) HideToTray(); await CheckForUpdatesAsync(); };
+    }
+
+    private async Task CheckForUpdatesAsync()
+    {
+        try
+        {
+            var update = await UpdateChecker.CheckAsync();
+            if (update is null || _isClosing) return;
+            UpdateNoticeText.Text = $"新しいバージョン {update.Version} が利用できます。";
+            UpdateNoticePanel.Visibility = Visibility.Visible;
+        }
+        catch
+        {
+            // アップデート確認に失敗しても、BLE接続や通常の画面表示は継続する。
+        }
+    }
+
+    private void DownloadUpdateClick(object sender, RoutedEventArgs e)
+    {
+        try { Process.Start(new ProcessStartInfo(BoothDownloadUrl) { UseShellExecute = true }); }
+        catch (Exception ex) { System.Windows.MessageBox.Show($"Boothのページを開けませんでした。\n{ex.Message}", "アップデート"); }
     }
 
     private Forms.NotifyIcon CreateTrayIcon()

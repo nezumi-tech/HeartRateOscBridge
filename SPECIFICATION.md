@@ -19,6 +19,7 @@ HeartRate OSC Bridgeは、Windows 11の標準Bluetooth LE機能を使ってBLE�
 - ReadyToRun: 無効
 - 現行バージョン: `1.0.0`
 - アセンブリ名/実行ファイル名: `HeartRateOscBridge`
+- GitHub Releaseによる起動時アップデート確認。新しい版がある場合はメイン画面からBoothの配布ページを開ける
 
 Release発行時の主要設定は次のとおりである。
 
@@ -108,6 +109,12 @@ Heart Rate MeasurementのFlagsを確認し、心拍数の値形式を判定す�
 9. 「切断」「設定」「心拍グラフ」
 10. OSC状態表示およびOSC ON/OFFボタン
 11. ステータス
+
+### 4.1 アップデート表示
+
+アプリ起動後、GitHub Releases API `https://api.github.com/repos/nezumi-tech/HeartRateOscBridge/releases/latest`へ非同期で問い合わせる。最新の安定版Releaseのタグ名から数値バージョンを取得し、実行中アセンブリのバージョンと比較する。最新Releaseのバージョンが大きい場合、メイン画面に新しいバージョンが利用可能である旨と「Boothでダウンロード」ボタンを表示する。ボタンは`https://nezumi-tech.booth.pm/items/8886420?utm_source=update_notice`を既定ブラウザーで開く。
+
+ネットワークが利用できない、GitHub APIがエラーを返す、またはタグを解釈できない場合はアップデート案内を表示せず、通常のアプリ機能を継続する。確認処理には8秒のタイムアウトを設定する。アプリによる自動ダウンロード・自動インストールは行わない。
 
 接続状態は「未接続」「接続中…」「接続中」などで表示する。心拍センサ名は製品名に限定せず、「心拍センサ: デバイス名」の形式で表示する。
 
