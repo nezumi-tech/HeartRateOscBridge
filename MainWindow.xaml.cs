@@ -7,7 +7,8 @@ namespace HeartRateAntPlus;
 
 public partial class MainWindow : Window
 {
-    private readonly List<(DateTime Timestamp, int Bpm)> _readings = new();
+    private readonly HeartRateStatistics _sessionStats = new();
+    private readonly Queue<(DateTime Timestamp, int Bpm)> _recentReadings = new();
     private readonly HeartRateHistory _history = new();
     private HeartRateGraphWindow? _graphWindow;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(250) };
@@ -84,9 +85,11 @@ public partial class MainWindow : Window
     {
         _source = source;
         _source.HeartRateChanged += (_, bpm) => Dispatcher.Invoke(() => UpdateHeartRate(bpm));
+        _source.BatteryLevelChanged += (_, level) => Dispatcher.Invoke(() => UpdateBatteryLevel(level));
         _source.ConnectionLost += SourceConnectionLost;
         try
         {
+            BatteryText.Text = "  電池 --";
             StatusText.Text = "接続中…"; StatusText.Foreground = System.Windows.Media.Brushes.Gold;
             await source.StartAsync(cancellationToken); _timer.Start(); ConnectButton.Content = "切断"; StatusText.Text = "接続中"; StatusText.Foreground = System.Windows.Media.Brushes.LightGreen; _osc.SendConnectionState(true);
             if (selected is not null) { _settings.LastDeviceAddress = selected.Address; _settings.LastDeviceName = selected.Name; _settings.Save(); }
@@ -103,7 +106,7 @@ public partial class MainWindow : Window
         Dispatcher.BeginInvoke(() =>
         {
             if (sender is not IHeartRateSource source || !ReferenceEquals(_source, source) || _isClosing) return;
-            _source = null; source.ConnectionLost -= SourceConnectionLost; source.Dispose(); _timer.Stop(); _osc.SendConnectionState(false); ConnectButton.Content = "接続"; BpmText.Text = "--"; SensorText.Text = "心拍センサ: 未接続"; StatusText.Text = "切断。再スキャン中…"; StatusText.Foreground = System.Windows.Media.Brushes.Gold; UpdateStatsDisplay(); StartAutoScan();
+            _source = null; source.ConnectionLost -= SourceConnectionLost; source.Dispose(); _timer.Stop(); _osc.SendConnectionState(false); ConnectButton.Content = "接続"; BpmText.Text = "--"; SensorText.Text = "心拍センサ: 未接続"; BatteryText.Text = "  電池 --"; StatusText.Text = "切断。再スキャン中…"; StatusText.Foreground = System.Windows.Media.Brushes.Gold; UpdateStatsDisplay(); StartAutoScan();
         });
     }
 
@@ -163,20 +166,23 @@ public partial class MainWindow : Window
 
     private void Disconnect(bool restartScan = true)
     {
-        _timer.Stop(); if (_source is not null) { _source.ConnectionLost -= SourceConnectionLost; _source.Dispose(); _osc.SendConnectionState(false); } _source = null; ConnectButton.Content = "接続"; StatusText.Text = "未接続"; StatusText.Foreground = System.Windows.Media.Brushes.LightGray; BpmText.Text = "--"; SensorText.Text = "心拍センサ: 未検出"; UpdateStatsDisplay();
+        _timer.Stop(); if (_source is not null) { _source.ConnectionLost -= SourceConnectionLost; _source.Dispose(); _osc.SendConnectionState(false); } _source = null; ConnectButton.Content = "接続"; StatusText.Text = "未接続"; StatusText.Foreground = System.Windows.Media.Brushes.LightGray; BpmText.Text = "--"; SensorText.Text = "心拍センサ: 未検出"; BatteryText.Text = "  電池 --"; UpdateStatsDisplay();
         if (restartScan) StartAutoScan();
     }
 
     private void Refresh() { _source?.Poll(); UpdateStatsDisplay(); }
-    private void UpdateHeartRate(int bpm) { BpmText.Text = bpm.ToString(); SensorText.Text = $"心拍センサ: {_source?.SensorId ?? "Bluetooth LE"}"; _readings.Add((DateTime.Now, bpm)); _history.Add(bpm); UpdateStatsDisplay(); _osc.SendHeartRate(bpm, CurrentAverage()); }
+    private int? _lastBpm;
+    private void UpdateBatteryLevel(int? level) { BatteryText.Text = level is >= 0 and <= 100 ? $"  電池 {level}%" : "  電池 --"; }
+    private void UpdateHeartRate(int bpm) { var now = DateTime.Now; BpmText.Text = bpm.ToString(); SensorText.Text = $"心拍センサ: {_source?.SensorId ?? "Bluetooth LE"}"; _lastBpm = bpm; _sessionStats.Add(bpm); _recentReadings.Enqueue((now, bpm)); TrimRecentReadings(now); _history.Add(bpm); UpdateStatsDisplay(); _osc.SendHeartRate(bpm, CurrentAverage()); }
     private void ResetStatsClick(object sender, RoutedEventArgs e) => ResetStats();
-    private void ResetStats() { _readings.Clear(); _history.Clear(); SessionStatsText.Text = "最大 --  最小 --  平均 --"; RecentStatsText.Text = "最大 --  最小 --  平均 --"; }
+    private void ResetStats() { _sessionStats.Clear(); _recentReadings.Clear(); _lastBpm = null; _history.Clear(); SessionStatsText.Text = "最大 --  最小 --  平均 --"; RecentStatsText.Text = "最大 --  最小 --  平均 --"; }
     private void GraphClick(object sender, RoutedEventArgs e) { if (_graphWindow is { IsVisible: true }) { _graphWindow.Activate(); return; } _graphWindow = new HeartRateGraphWindow(_history) { Owner = this }; _graphWindow.Show(); }
-    private void UpdateStatsDisplay() { var recent = _readings.Where(x => x.Timestamp >= DateTime.Now.AddMinutes(-5)).Select(x => x.Bpm).ToArray(); var all = _readings.Select(x => x.Bpm).ToArray(); SetStatsText(SessionStatsText, all); SetStatsText(RecentStatsText, recent); }
-    private static void SetStatsText(System.Windows.Controls.TextBlock target, int[] values) { target.Text = values.Length == 0 ? "最大 --  最小 --  平均 --" : $"最大 {values.Max()}  最小 {values.Min()}  平均 {values.Average():0.0}"; }
-    private int CurrentAverage() => _readings.Count == 0 ? 0 : (int)Math.Round(_readings.Average(x => x.Bpm));
-    private void SettingsClick(object sender, RoutedEventArgs e) { var dialog = new SettingsWindow(_settings) { Owner = this }; if (dialog.ShowDialog() == true) { _settings.Save(); _settings.ApplyStartupRegistration(); _osc.ApplySettings(_settings); UpdateOscUi(); if (_source is not null) { _osc.SendConnectionState(true); if (_readings.Count > 0) _osc.SendHeartRate(_readings[^1].Bpm, CurrentAverage()); } if (_settings.Simulation) StopAutoScan(); else StartAutoScan(); } }
-    private void OscToggleClick(object sender, RoutedEventArgs e) { _settings.OscEnabled = !_settings.OscEnabled; _settings.Save(); _osc.ApplySettings(_settings); if (_settings.OscEnabled && _source is not null) { _osc.SendConnectionState(true); if (_readings.Count > 0) _osc.SendHeartRate(_readings[^1].Bpm, CurrentAverage()); } UpdateOscUi(); }
+    private void TrimRecentReadings(DateTime now) { while (_recentReadings.Count > 0 && _recentReadings.Peek().Timestamp < now.AddMinutes(-5)) _recentReadings.Dequeue(); }
+    private void UpdateStatsDisplay() { TrimRecentReadings(DateTime.Now); SetStatsText(SessionStatsText, _sessionStats); var recent = new HeartRateStatistics(); foreach (var reading in _recentReadings) recent.Add(reading.Bpm); SetStatsText(RecentStatsText, recent); }
+    private static void SetStatsText(System.Windows.Controls.TextBlock target, HeartRateStatistics stats) { target.Text = !stats.HasValue ? "最大 --  最小 --  平均 --" : $"最大 {stats.Maximum}  最小 {stats.Minimum}  平均 {stats.Average:0.0}"; }
+    private int CurrentAverage() => _sessionStats.HasValue ? (int)Math.Round(_sessionStats.Average) : 0;
+    private void SettingsClick(object sender, RoutedEventArgs e) { var dialog = new SettingsWindow(_settings) { Owner = this }; if (dialog.ShowDialog() == true) { _settings.Save(); _settings.ApplyStartupRegistration(); _osc.ApplySettings(_settings); UpdateOscUi(); if (_source is not null) { _osc.SendConnectionState(true); if (_lastBpm.HasValue) _osc.SendHeartRate(_lastBpm.Value, CurrentAverage()); } if (_settings.Simulation) StopAutoScan(); else StartAutoScan(); } }
+    private void OscToggleClick(object sender, RoutedEventArgs e) { _settings.OscEnabled = !_settings.OscEnabled; _settings.Save(); _osc.ApplySettings(_settings); if (_settings.OscEnabled && _source is not null) { _osc.SendConnectionState(true); if (_lastBpm.HasValue) _osc.SendHeartRate(_lastBpm.Value, CurrentAverage()); } UpdateOscUi(); }
     private void UpdateOscUi() { OscStatusText.Text = _settings.OscEnabled ? "OSC: ON" : "OSC: OFF"; OscStatusText.Foreground = _settings.OscEnabled ? System.Windows.Media.Brushes.LightGreen : System.Windows.Media.Brushes.LightGray; OscToggleButton.Content = _settings.OscEnabled ? "OSC OFF" : "OSC ON"; }
     protected override void OnClosing(CancelEventArgs e) { if (!_exitRequested && _settings.MinimizeToTray) { e.Cancel = true; HideToTray(); return; } base.OnClosing(e); }
     protected override void OnClosed(EventArgs e) { _isClosing = true; StopAutoScan(); _graphWindow?.Close(); Disconnect(false); _osc.Dispose(); _trayIcon.Visible = false; _trayIcon.Dispose(); base.OnClosed(e); }

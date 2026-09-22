@@ -34,6 +34,7 @@ public interface IHeartRateSource : IDisposable
 {
     string SensorId { get; }
     event EventHandler<int>? HeartRateChanged;
+    event EventHandler<int?>? BatteryLevelChanged;
     event EventHandler? ConnectionLost;
     Task StartAsync(CancellationToken cancellationToken = default);
     void Poll();
@@ -44,6 +45,7 @@ public sealed class SimulatedHeartRateSource : IHeartRateSource
     private readonly Random _random = new();
     public string SensorId => "SIM-120";
     public event EventHandler<int>? HeartRateChanged;
+    public event EventHandler<int?>? BatteryLevelChanged { add { } remove { } }
     public event EventHandler? ConnectionLost { add { } remove { } }
     public Task StartAsync(CancellationToken cancellationToken = default) { HeartRateChanged?.Invoke(this, 72); return Task.CompletedTask; }
     public void Poll() => HeartRateChanged?.Invoke(this, 68 + _random.Next(0, 18));
@@ -54,13 +56,17 @@ public sealed class BluetoothLeHeartRateSource : IHeartRateSource
 {
     private static readonly Guid HeartRateService = Guid.Parse("0000180d-0000-1000-8000-00805f9b34fb");
     private static readonly Guid HeartRateMeasurement = Guid.Parse("00002a37-0000-1000-8000-00805f9b34fb");
+    private static readonly Guid BatteryService = Guid.Parse("0000180f-0000-1000-8000-00805f9b34fb");
+    private static readonly Guid BatteryLevel = Guid.Parse("00002a19-0000-1000-8000-00805f9b34fb");
     private readonly ulong _address;
     private readonly string _selectedName;
     private BluetoothLEDevice? _device;
     private GattCharacteristic? _characteristic;
+    private GattCharacteristic? _batteryCharacteristic;
     private bool _disposed;
     public string SensorId { get; private set; }
     public event EventHandler<int>? HeartRateChanged;
+    public event EventHandler<int?>? BatteryLevelChanged;
     public event EventHandler? ConnectionLost;
 
     public BluetoothLeHeartRateSource(BleDeviceInfo selected) { _address = selected.Address; _selectedName = selected.Name; SensorId = selected.Name; }
@@ -78,6 +84,55 @@ public sealed class BluetoothLeHeartRateSource : IHeartRateSource
         _characteristic.ValueChanged += OnValueChanged;
         var status = await _characteristic.WriteClientCharacteristicConfigurationDescriptorAsync(GattClientCharacteristicConfigurationDescriptorValue.Notify);
         if (status != GattCommunicationStatus.Success) throw new InvalidOperationException($"心拍通知を有効化できませんでした: {status}");
+
+        await InitializeBatteryLevelAsync();
+    }
+
+    private async Task InitializeBatteryLevelAsync()
+    {
+        try
+        {
+            if (_device is null) return;
+            var services = await _device.GetGattServicesForUuidAsync(BatteryService, BluetoothCacheMode.Uncached);
+            if (services.Status != GattCommunicationStatus.Success || services.Services.Count == 0)
+            {
+                BatteryLevelChanged?.Invoke(this, null);
+                return;
+            }
+
+            var characteristics = await services.Services[0].GetCharacteristicsForUuidAsync(BatteryLevel, BluetoothCacheMode.Uncached);
+            if (characteristics.Status != GattCommunicationStatus.Success || characteristics.Characteristics.Count == 0)
+            {
+                BatteryLevelChanged?.Invoke(this, null);
+                return;
+            }
+
+            _batteryCharacteristic = characteristics.Characteristics[0];
+            var read = await _batteryCharacteristic.ReadValueAsync(BluetoothCacheMode.Uncached);
+            if (read.Status == GattCommunicationStatus.Success) PublishBatteryLevel(read.Value);
+
+            if (_batteryCharacteristic.CharacteristicProperties.HasFlag(GattCharacteristicProperties.Notify))
+            {
+                _batteryCharacteristic.ValueChanged += OnBatteryValueChanged;
+                var notifyStatus = await _batteryCharacteristic.WriteClientCharacteristicConfigurationDescriptorAsync(GattClientCharacteristicConfigurationDescriptorValue.Notify);
+                if (notifyStatus != GattCommunicationStatus.Success) _batteryCharacteristic.ValueChanged -= OnBatteryValueChanged;
+            }
+        }
+        catch
+        {
+            // バッテリー情報は任意機能。読取に失敗しても心拍計測を継続する。
+            BatteryLevelChanged?.Invoke(this, null);
+        }
+    }
+
+    private void OnBatteryValueChanged(GattCharacteristic sender, GattValueChangedEventArgs args) => PublishBatteryLevel(args.CharacteristicValue);
+
+    private void PublishBatteryLevel(IBuffer buffer)
+    {
+        var reader = DataReader.FromBuffer(buffer);
+        if (reader.UnconsumedBufferLength < 1) { BatteryLevelChanged?.Invoke(this, null); return; }
+        var level = reader.ReadByte();
+        BatteryLevelChanged?.Invoke(this, level <= 100 ? level : null);
     }
 
     private void DeviceConnectionStatusChanged(BluetoothLEDevice sender, object args)
@@ -102,6 +157,7 @@ public sealed class BluetoothLeHeartRateSource : IHeartRateSource
     {
         _disposed = true;
         if (_characteristic is not null) _characteristic.ValueChanged -= OnValueChanged;
+        if (_batteryCharacteristic is not null) _batteryCharacteristic.ValueChanged -= OnBatteryValueChanged;
         if (_device is not null) { _device.ConnectionStatusChanged -= DeviceConnectionStatusChanged; _device.Dispose(); }
     }
 }

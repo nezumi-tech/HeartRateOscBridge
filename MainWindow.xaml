@@ -20,7 +20,10 @@
     </DockPanel>
 
     <!-- 2. 心拍センサ名 -->
-    <TextBlock Grid.Row="1" x:Name="SensorText" Text="心拍センサ: 未検出" Foreground="#AAB0BC" HorizontalAlignment="Center" Margin="0,28,0,0"/>
+    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,28,0,0">
+      <TextBlock x:Name="SensorText" Text="心拍センサ: 未検出" Foreground="#AAB0BC"/>
+      <TextBlock x:Name="BatteryText" Text="  電池 --" Foreground="#737A87" FontSize="11" VerticalAlignment="Center" Margin="8,0,0,0"/>
+    </StackPanel>
 
     <!-- 3. 現在の心拍数 -->
     <TextBlock Grid.Row="2" Text="現在の心拍数" Foreground="#AAB0BC" HorizontalAlignment="Center" FontSize="16" Margin="0,28,0,0"/>
